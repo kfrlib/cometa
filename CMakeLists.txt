@@ -18,6 +18,6 @@ set(SRC
     include/cometa/string.hpp
 )
 
-add_compile_options(-std=c++1y -Wall)
+add_compile_options(-std=c++1y -Wall -fno-exceptions -fno-rtti)
 
 add_executable(cometa_test tests/cometa_test.cpp ${SRC})

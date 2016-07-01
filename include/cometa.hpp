@@ -1934,7 +1934,7 @@ constexpr inline type_id_t typeident_impl() noexcept
 }
 
 #ifdef CMT_COMPILER_CLANG
-constexpr size_t typename_prefix  = details::strlen("constexpr auto cometa::ctype_name() [T = ");
+constexpr size_t typename_prefix  = details::strlen("auto cometa::ctype_name() [T = ");
 constexpr size_t typename_postfix = details::strlen("]");
 #else
 constexpr size_t typename_prefix  = details::strlen("constexpr auto cometa::ctype_name() [with T = ");
