@@ -25,6 +25,10 @@ CoMeta is platform-independent but modern C++14 compiler is required.
 * Clang 3.7 or newer
 * GCC 5.1 or newer
 
+## Tests
+
+See `tests/cometa_test.cpp`
+
 ## License
 MIT
 
