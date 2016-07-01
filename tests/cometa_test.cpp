@@ -24,6 +24,17 @@ void func1(bool, float) {}
 
 CMT_FN(func1)
 
+struct struct3
+{
+    int array[4];
+};
+
+void func(const struct3& s3)
+{
+    constexpr size_t size = CMT_ARRAYSIZE(s3.array);
+    static_assert(size == 4, "");
+}
+
 int main(int, char**)
 {
     static_assert(is_poweroftwo(1), "");

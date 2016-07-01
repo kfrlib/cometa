@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <tuple>
 #include <type_traits>
 #include <vector>
@@ -23,6 +24,33 @@ namespace cometa
 
 using std::size_t;
 using std::ptrdiff_t;
+
+#if __cplusplus >= 201103L || CMT_MSC_VER >= 1900 || CMT_HAS_FEATURE(cxx_constexpr)
+
+template <typename T, size_t N>
+constexpr inline static size_t arraysize(const T (&)[N]) noexcept
+{
+    return N;
+}
+
+template <typename T, size_t N>
+constexpr inline static std::integral_constant<size_t, N> carraysize(const T (&)[N]) noexcept
+{
+    return {};
+}
+
+#define CMT_ARRAYSIZE(arr) decltype(carraysize(arr))::value
+#elif CMT_COMPILER_MSVC
+#define CMT_ARRAYSIZE(arr) _countof(arr)
+#elif __cplusplus >= 199711L &&                                                                              \
+    (defined(__INTEL_COMPILER) || defined(__clang__) ||                                                      \
+     (defined(__GNUC__) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4))))
+template <typename T, size_t N>
+char (&COUNTOF_REQUIRES_ARRAY_ARGUMENT(T (&)[N]))[N];
+#define CMT_ARRAYSIZE(x) sizeof(COUNTOF_REQUIRES_ARRAY_ARGUMENT(x))
+#else
+#define CMT_ARRAYSIZE(arr) sizeof(arr) / sizeof(arr[0])
+#endif
 
 using pvoid = void*;
 
