@@ -70,7 +70,7 @@ constexpr inline bool args_and() { return true; }
 template <typename... Ts>
 constexpr inline bool args_and(bool x, Ts... rest)
 {
-    return x && args_or(rest...);
+    return x && args_and(rest...);
 }
 
 template <typename T, typename Enable = void>
@@ -925,7 +925,7 @@ struct carray<T, 1>
     constexpr carray() noexcept = default;
     constexpr carray(T val) noexcept : val(val) {}
 
-    template <typename Fn, size_t index = 0>
+    template <typename Fn, size_t index = 0, CMT_ENABLE_IF(is_callable<Fn, csize_t<index>>::value)>
     constexpr carray(Fn&& fn, csize_t<index> = csize_t<index>{}) noexcept
         : val(static_cast<T>(fn(csize<index>)))
     {
