@@ -1,7 +1,6 @@
 /**
  * Copyright (C) 2016 D Levin (http://www.kfrlib.com)
- * This file is part of CoMeta (C++14 metaprogramming library created for KFR
- * framework)
+ * This file is part of CoMeta (C++14 metaprogramming library created for KFR framework)
  * License: MIT
  */
 
@@ -11,12 +10,12 @@
 #include <array>
 #include <cstdio>
 #include <string>
+#include <utility>
 
-CMT_DIAGNOSTIC(push)
-CMT_DIAGNOSTIC(ignored "-Wformat-security")
-#ifdef __clang__
-CMT_DIAGNOSTIC(ignored "-Wused-but-marked-unused")
-CMT_DIAGNOSTIC(ignored "-Wgnu-string-literal-operator-template")
+#pragma GCC diagnostic push
+#if CMT_HAS_WARNING("-Wformat-security")
+#pragma GCC diagnostic ignored "-Wformat-security"
+#pragma GCC diagnostic ignored "-Wused-but-marked-unused"
 #endif
 
 namespace cometa
@@ -37,12 +36,18 @@ inline std::string repr(const named_arg<T>& value)
     return std::string(value.name) + " = " + as_string(value.value);
 }
 
+template <typename T1, typename T2>
+inline std::string repr(const std::pair<T1, T2>& value)
+{
+    return "(" + as_string(value.first) + "; " + as_string(value.second) + ")";
+}
+
 template <typename T>
 using repr_type = decay<decltype(repr(std::declval<T>()))>;
 
 namespace details
 {
-template <typename T, char t = -1, int width = -1, int prec = -1>
+template <typename T, char t = static_cast<char>(-1), int width = -1, int prec = -1>
 struct fmt_t
 {
     const T& value;
@@ -67,7 +72,7 @@ constexpr auto itoa()
 template <typename T, char t, int width, int prec, CMT_ENABLE_IF(width < 0 && prec >= 0)>
 CMT_INLINE constexpr auto value_fmt_arg(ctype_t<fmt_t<T, t, width, prec>>)
 {
-    return concat_cstring(make_cstring("."), itoa<prec>());
+    return concat_cstring(make_cstring("%."), itoa<prec>());
 }
 template <typename T, char t, int width, int prec, CMT_ENABLE_IF(width >= 0 && prec < 0)>
 CMT_INLINE constexpr auto value_fmt_arg(ctype_t<fmt_t<T, t, width, prec>>)
@@ -85,48 +90,48 @@ CMT_INLINE constexpr auto value_fmt_arg(ctype_t<fmt_t<T, t, width, prec>>)
     return concat_cstring(itoa<width>(), make_cstring("."), itoa<prec>());
 }
 
-CMT_INLINE constexpr auto value_fmt(ctype_t<bool>) { return make_cstring("s"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<std::string>) { return make_cstring("s"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<char>) { return make_cstring("d"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<signed char>) { return make_cstring("d"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<unsigned char>) { return make_cstring("d"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<short>) { return make_cstring("d"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<unsigned short>) { return make_cstring("d"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<int>) { return make_cstring("d"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<long>) { return make_cstring("ld"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<long long>) { return make_cstring("lld"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<unsigned int>) { return make_cstring("u"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<unsigned long>) { return make_cstring("lu"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<unsigned long long>) { return make_cstring("llu"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<float>) { return make_cstring("g"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<double>) { return make_cstring("g"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<long double>) { return make_cstring("Lg"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<const char*>) { return make_cstring("s"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<char*>) { return make_cstring("s"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<void*>) { return make_cstring("p"); }
-CMT_INLINE constexpr auto value_fmt(ctype_t<const void*>) { return make_cstring("p"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<bool>) { return make_cstring("%s"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<std::string>) { return make_cstring("%s"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<char>) { return make_cstring("%d"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<signed char>) { return make_cstring("%d"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<unsigned char>) { return make_cstring("%d"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<short>) { return make_cstring("%d"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<unsigned short>) { return make_cstring("%d"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<int>) { return make_cstring("%d"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<long>) { return make_cstring("%ld"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<long long>) { return make_cstring("%lld"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<unsigned int>) { return make_cstring("%u"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<unsigned long>) { return make_cstring("%lu"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<unsigned long long>) { return make_cstring("%llu"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<float>) { return make_cstring("%g"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<double>) { return make_cstring("%g"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<long double>) { return make_cstring("%Lg"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<const char*>) { return make_cstring("%s"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<char*>) { return make_cstring("%s"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<void*>) { return make_cstring("%p"); }
+CMT_INLINE constexpr auto value_fmt(ctype_t<const void*>) { return make_cstring("%p"); }
 
 template <char... chars>
 CMT_INLINE constexpr auto value_fmt(ctype_t<cchars_t<chars...>>)
 {
-    return concat_cstring(make_cstring("s"), make_cstring(cchars<chars...>));
+    return concat_cstring(make_cstring("%s"), make_cstring(cchars<chars...>));
 }
 
 template <typename T>
 CMT_INLINE constexpr auto value_fmt(ctype_t<ctype_t<T>>)
 {
-    return make_cstring("s");
+    return make_cstring("%s");
 }
 
 template <typename T, int width, int prec>
-CMT_INLINE constexpr auto value_fmt(ctype_t<fmt_t<T, -1, width, prec>> fmt)
+CMT_INLINE constexpr auto value_fmt(ctype_t<fmt_t<T, static_cast<char>(-1), width, prec>> fmt)
 {
-    return concat_cstring(value_fmt_arg(fmt), value_fmt(ctype<repr_type<T>>));
+    return concat_cstring(make_cstring("%"), value_fmt_arg(fmt), value_fmt(ctype<repr_type<T>>));
 }
 template <typename T, char t, int width, int prec>
 CMT_INLINE constexpr auto value_fmt(ctype_t<fmt_t<T, t, width, prec>> fmt)
 {
-    return concat_cstring(value_fmt_arg(fmt), cstring<2>{ { t, 0 } });
+    return concat_cstring(make_cstring("%"), value_fmt_arg(fmt), cstring<2>{ { t, 0 } });
 }
 
 template <char... chars>
@@ -214,7 +219,7 @@ template <typename Arg, typename... Args>
 CMT_INLINE auto build_fmt(const std::string& str, ctypes_t<Arg, Args...>)
 {
     constexpr auto fmt = value_fmt(ctype<decay<Arg>>);
-    return build_fmt(replace_one(str, "{}", "%" + std::string(fmt.data())), ctypes<Args...>);
+    return build_fmt(replace_one(str, "{}", std::string(fmt.data())), ctypes<Args...>);
 }
 }
 
@@ -225,17 +230,20 @@ CMT_INLINE details::fmt_t<T, t, width, prec> fmt(const T& value)
 }
 
 template <int width = -1, int prec = -1, typename T>
-CMT_INLINE details::fmt_t<T, -1, width, prec> fmtwidth(const T& value)
+CMT_INLINE details::fmt_t<T, static_cast<char>(-1), width, prec> fmtwidth(const T& value)
 {
     return { value };
 }
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wgnu-string-literal-operator-template"
 
 constexpr auto build_fmt_str(cchars_t<>, ctypes_t<>) { return make_cstring(""); }
 
 template <char... chars, typename Arg, typename... Args>
 constexpr auto build_fmt_str(cchars_t<'@', chars...>, ctypes_t<Arg, Args...>)
 {
-    return concat_cstring(make_cstring("%"), details::value_fmt(ctype<decay<Arg>>),
+    return concat_cstring(details::value_fmt(ctype<decay<Arg>>),
                           build_fmt_str(cchars<chars...>, ctypes<Args...>));
 }
 
@@ -288,6 +296,8 @@ constexpr CMT_INLINE print_t<chars...> operator""_print()
     return {};
 }
 
+#pragma GCC diagnostic pop
+
 template <typename... Args>
 CMT_INLINE void printfmt(const std::string& fmt, const Args&... args)
 {
@@ -323,21 +333,26 @@ CMT_INLINE std::string format(const std::string& fmt, const Args&... args)
     return result;
 }
 
+namespace details
+{
+template <typename T>
+constexpr auto get_value_fmt()
+{
+    return details::value_fmt(ctype<decay<repr_type<T>>>);
+}
+}
+
 template <typename... Args>
 CMT_INLINE void print(const Args&... args)
 {
-    constexpr auto format_str = concat_cstring(
-        concat_cstring(make_cstring("%"), details::value_fmt(ctype<decay<repr_type<Args>>>))...);
-
+    constexpr auto format_str = concat_cstring(details::get_value_fmt<Args>()...);
     std::printf(format_str.data(), details::pack_value(repr(args))...);
 }
 
 template <typename... Args>
 CMT_INLINE void println(const Args&... args)
 {
-    constexpr auto format_str = concat_cstring(
-        concat_cstring(make_cstring("%"), details::value_fmt(ctype<decay<repr_type<Args>>>))...,
-        make_cstring("\n"));
+    constexpr auto format_str = concat_cstring(details::get_value_fmt<Args>()..., make_cstring("\n"));
     std::printf(format_str.data(), details::pack_value(repr(args))...);
 }
 
@@ -345,8 +360,7 @@ template <typename... Args>
 CMT_INLINE std::string as_string(const Args&... args)
 {
     std::string result;
-    constexpr auto format_str = concat_cstring(
-        concat_cstring(make_cstring("%"), details::value_fmt(ctype<decay<repr_type<Args>>>))...);
+    constexpr auto format_str = concat_cstring(details::get_value_fmt<Args>()...);
 
     const int size = std::snprintf(nullptr, 0, format_str.data(), details::pack_value(repr(args))...);
     if (size <= 0)
@@ -394,4 +408,4 @@ inline std::string join(T x, U y, Ts... rest)
 }
 }
 
-CMT_DIAGNOSTIC(pop)
+#pragma GCC diagnostic pop

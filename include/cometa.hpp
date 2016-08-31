@@ -1,7 +1,6 @@
 /**
  * Copyright (C) 2016 D Levin (http://www.kfrlib.com)
- * This file is part of CoMeta (C++14 metaprogramming library created for KFR
- * framework)
+ * This file is part of CoMeta (C++14 metaprogramming library created for KFR framework)
  * License: MIT
  */
 
@@ -11,13 +10,12 @@
 
 #include <algorithm>
 #include <array>
-#include <cstdint>
 #include <tuple>
 #include <type_traits>
 #include <vector>
 
-CMT_DIAGNOSTIC(push)
-CMT_DIAGNOSTIC(ignored "-Wshadow")
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"
 
 namespace cometa
 {
@@ -56,6 +54,18 @@ using pvoid = void*;
 
 template <typename...>
 using void_t = void;
+
+// Workaround for GCC 4.8
+template <typename T>
+constexpr const T& const_max(const T& x, const T& y)
+{
+    return x > y ? x : y;
+}
+template <typename T>
+constexpr const T& const_min(const T& x, const T& y)
+{
+    return x < y ? x : y;
+}
 
 namespace details
 {
@@ -170,17 +180,19 @@ constexpr size_t typeindex()
 template <typename T>
 struct compound_type_traits
 {
-    constexpr static size_t width   = 1;
-    using subtype                   = T;
-    using deep_subtype              = T;
-    constexpr static bool is_scalar = true;
+    constexpr static size_t width      = 1;
+    constexpr static size_t deep_width = width;
+    using subtype                      = T;
+    using deep_subtype                 = T;
+    constexpr static size_t depth      = 0;
+    constexpr static bool is_scalar    = true;
 
     template <typename U>
     using rebind = U;
     template <typename U>
     using deep_rebind = U;
 
-    static constexpr const subtype& at(const T& value, size_t /*index*/) { return value; }
+    CMT_INLINE static constexpr const subtype& at(const T& value, size_t /*index*/) { return value; }
 };
 
 template <typename T>
@@ -193,7 +205,7 @@ template <typename T>
 using deep_subtype = typename compound_type_traits<T>::deep_subtype;
 
 template <typename T, typename SubType>
-using rebind = typename compound_type_traits<T>::template rebind<SubType>;
+using rebind_subtype = typename compound_type_traits<T>::template rebind<SubType>;
 
 template <typename T, typename SubType>
 using deep_rebind = typename compound_type_traits<T>::template deep_rebind<SubType>;
@@ -201,24 +213,33 @@ using deep_rebind = typename compound_type_traits<T>::template deep_rebind<SubTy
 template <typename T>
 struct compound_type_traits<std::pair<T, T>>
 {
-    constexpr static size_t width   = 2;
-    using subtype                   = T;
-    using deep_subtype              = cometa::deep_subtype<T>;
-    constexpr static bool is_scalar = false;
+    constexpr static size_t width      = 2;
+    constexpr static size_t deep_width = width * compound_type_traits<T>::width;
+    using subtype                      = T;
+    using deep_subtype                 = cometa::deep_subtype<T>;
+    constexpr static bool is_scalar    = false;
+    constexpr static size_t depth      = cometa::compound_type_traits<T>::depth + 1;
 
     template <typename U>
     using rebind = std::pair<U, U>;
     template <typename U>
     using deep_rebind = std::pair<cometa::deep_rebind<subtype, U>, cometa::deep_rebind<subtype, U>>;
 
-    static constexpr const subtype& at(const std::pair<subtype, subtype>& value, size_t index)
+    CMT_INLINE static constexpr const subtype& at(const std::pair<subtype, subtype>& value, size_t index)
     {
         return index == 0 ? value.first : value.second;
     }
 };
 
+namespace ops
+{
+struct empty
+{
+};
+}
+
 template <typename T, T val>
-struct cval_t
+struct cval_t : ops::empty
 {
     constexpr static T value                 = val;
     constexpr cval_t() noexcept              = default;
@@ -356,7 +377,7 @@ struct get_nth_type<index>
 }
 
 template <typename T, T... values>
-struct cvals_t
+struct cvals_t : ops::empty
 {
     using type = cvals_t<T, values...>;
     constexpr static size_t size() { return sizeof...(values); }
@@ -390,31 +411,11 @@ struct cvals_t
 };
 
 template <typename T>
-struct cvals_t<T>
+struct cvals_t<T> : ops::empty
 {
     using type = cvals_t<T>;
     constexpr static size_t size() { return 0; }
 };
-
-namespace details
-{
-template <typename T1, typename T2>
-struct concat_impl;
-
-template <typename T, T... values1, T... values2>
-struct concat_impl<cvals_t<T, values1...>, cvals_t<T, values2...>>
-{
-    using type = cvals_t<T, values1..., values2...>;
-};
-}
-template <typename T1, typename T2>
-using concat_lists = typename details::concat_impl<T1, T2>::type;
-
-template <typename T1, typename T2>
-constexpr inline concat_lists<T1, T2> cconcat(T1, T2)
-{
-    return {};
-}
 
 template <bool... values>
 using cbools_t = cvals_t<bool, values...>;
@@ -510,6 +511,30 @@ struct ctypes_t
 
 template <typename... Ts>
 constexpr ctypes_t<Ts...> ctypes{};
+namespace details
+{
+template <typename T1, typename T2>
+struct concat_impl;
+
+template <typename T, T... values1, T... values2>
+struct concat_impl<cvals_t<T, values1...>, cvals_t<T, values2...>>
+{
+    using type = cvals_t<T, values1..., values2...>;
+};
+template <typename... types1, typename... types2>
+struct concat_impl<ctypes_t<types1...>, ctypes_t<types2...>>
+{
+    using type = ctypes_t<types1..., types2...>;
+};
+}
+template <typename T1, typename T2>
+using concat_lists = typename details::concat_impl<T1, T2>::type;
+
+template <typename T1, typename T2>
+constexpr inline concat_lists<T1, T2> cconcat(T1, T2)
+{
+    return {};
+}
 
 namespace details
 {
@@ -606,7 +631,8 @@ constexpr inline Ret cfilter(cvals_t<T, vals...>, cvals_t<bool, flags...>)
     {                                                                                                        \
         return Ret{};                                                                                        \
     }
-
+namespace ops
+{
 // clang-format off
 CMT_UN_OP(-)
 CMT_UN_OP(+)
@@ -632,6 +658,7 @@ CMT_BIN_OP(&)
 CMT_BIN_OP(|)
 CMT_BIN_OP(^)
 // clang-format on
+}
 
 namespace details
 {
@@ -922,18 +949,18 @@ struct carray;
 template <typename T>
 struct carray<T, 1>
 {
-    constexpr carray() noexcept = default;
-    constexpr carray(T val) noexcept : val(val) {}
+    CMT_INTRIN constexpr carray() noexcept = default;
+    CMT_INTRIN constexpr carray(T val) noexcept : val(val) {}
 
     template <typename Fn, size_t index = 0, CMT_ENABLE_IF(is_callable<Fn, csize_t<index>>::value)>
-    constexpr carray(Fn&& fn, csize_t<index> = csize_t<index>{}) noexcept
+    CMT_INTRIN constexpr carray(Fn&& fn, csize_t<index> = csize_t<index>{}) noexcept
         : val(static_cast<T>(fn(csize<index>)))
     {
     }
 
-    constexpr carray(const carray&) noexcept = default;
-    constexpr carray(carray&&) noexcept      = default;
-    static constexpr size_t size() noexcept { return 1; }
+    CMT_INTRIN constexpr carray(const carray&) noexcept = default;
+    CMT_INTRIN constexpr carray(carray&&) noexcept      = default;
+    CMT_INTRIN static constexpr size_t size() noexcept { return 1; }
 
     template <size_t index>
     CMT_INTRIN constexpr T& get(csize_t<index>) noexcept
@@ -957,17 +984,17 @@ struct carray<T, 1>
     {
         return get(csize<index>);
     }
-    constexpr const T* front() const noexcept { return val; }
-    constexpr T* front() noexcept { return val; }
-    constexpr const T* back() const noexcept { return val; }
-    constexpr T* back() noexcept { return val; }
-    constexpr const T* begin() const noexcept { return &val; }
-    constexpr const T* end() const noexcept { return &val + 1; }
-    constexpr T* begin() noexcept { return &val; }
-    constexpr T* end() noexcept { return &val + 1; }
-    constexpr const T* data() const noexcept { return begin(); }
-    constexpr T* data() noexcept { return begin(); }
-    constexpr bool empty() const noexcept { return false; }
+    CMT_INTRIN constexpr const T* front() const noexcept { return val; }
+    CMT_INTRIN constexpr T* front() noexcept { return val; }
+    CMT_INTRIN constexpr const T* back() const noexcept { return val; }
+    CMT_INTRIN constexpr T* back() noexcept { return val; }
+    CMT_INTRIN constexpr const T* begin() const noexcept { return &val; }
+    CMT_INTRIN constexpr const T* end() const noexcept { return &val + 1; }
+    CMT_INTRIN constexpr T* begin() noexcept { return &val; }
+    CMT_INTRIN constexpr T* end() noexcept { return &val + 1; }
+    CMT_INTRIN constexpr const T* data() const noexcept { return begin(); }
+    CMT_INTRIN constexpr T* data() noexcept { return begin(); }
+    CMT_INTRIN constexpr bool empty() const noexcept { return false; }
     T val;
 };
 
@@ -975,25 +1002,31 @@ template <typename T, size_t N>
 struct carray : carray<T, N - 1>
 {
     template <typename... Ts>
-    constexpr carray(T first, Ts... list) noexcept : carray<T, N - 1>(list...), val(first)
+    CMT_INTRIN constexpr carray(T first, Ts... list) noexcept : carray<T, N - 1>(list...), val(first)
     {
         static_assert(sizeof...(list) + 1 == N, "carray: Argument count is invalid");
     }
 
     template <typename Fn, size_t index = N - 1>
-    constexpr carray(Fn&& fn, csize_t<index> = csize_t<index>{}) noexcept
+    CMT_INTRIN constexpr carray(Fn&& fn, csize_t<index> = csize_t<index>{}) noexcept
         : carray<T, N - 1>(std::forward<Fn>(fn), csize<index - 1>),
           val(static_cast<T>(fn(csize<index>)))
     {
     }
 
-    constexpr carray() noexcept              = default;
-    constexpr carray(const carray&) noexcept = default;
-    constexpr carray(carray&&) noexcept      = default;
-    static constexpr size_t size() noexcept { return N; }
+    CMT_INTRIN constexpr carray() noexcept              = default;
+    CMT_INTRIN constexpr carray(const carray&) noexcept = default;
+    CMT_INTRIN constexpr carray(carray&&) noexcept      = default;
+    CMT_INTRIN static constexpr size_t size() noexcept { return N; }
     CMT_INTRIN constexpr T& get(csize_t<N - 1>) noexcept { return val; }
     template <size_t index>
     CMT_INTRIN constexpr T& get(csize_t<index>) noexcept
+    {
+        return carray<T, N - 1>::get(csize<index>);
+    }
+    CMT_INTRIN constexpr const T& get(csize_t<N - 1>) const noexcept { return val; }
+    template <size_t index>
+    CMT_INTRIN constexpr const T& get(csize_t<index>) const noexcept
     {
         return carray<T, N - 1>::get(csize<index>);
     }
@@ -1001,12 +1034,6 @@ struct carray : carray<T, N - 1>
     CMT_INTRIN constexpr T& get() noexcept
     {
         return get(csize<index>);
-    }
-    CMT_INTRIN constexpr const T& get(csize_t<N - 1>) const noexcept { return val; }
-    template <size_t index>
-    CMT_INTRIN constexpr const T& get(csize_t<index>) const noexcept
-    {
-        return carray<T, N - 1>::get(csize<index>);
     }
     template <size_t index>
     CMT_INTRIN constexpr const T& get() const noexcept
@@ -1024,7 +1051,6 @@ struct carray : carray<T, N - 1>
     CMT_INTRIN constexpr const T* data() const noexcept { return begin(); }
     CMT_INTRIN constexpr T* data() noexcept { return begin(); }
     CMT_INTRIN constexpr bool empty() const noexcept { return false; }
-
 private:
     T val;
 };
@@ -1054,35 +1080,35 @@ private:
     };
 
 template <typename T>
-inline auto pass_through(T&& x) noexcept
+CMT_INTRIN auto pass_through(T&& x) noexcept
 {
     return x;
 }
 
 template <typename... Ts>
-inline void noop(Ts...) noexcept
+CMT_INTRIN void noop(Ts...) noexcept
 {
 }
 
 template <typename T1, typename... Ts>
-constexpr inline T1&& get_first(T1&& x, Ts...) noexcept
+CMT_INTRIN constexpr T1&& get_first(T1&& x, Ts...) noexcept
 {
     return std::forward<T1>(x);
 }
 
 template <typename T1, typename T2, typename... Ts>
-constexpr inline T2&& get_second(T1, T2&& x, Ts...) noexcept
+CMT_INTRIN constexpr T2&& get_second(T1, T2&& x, Ts...) noexcept
 {
     return std::forward<T2>(x);
 }
 
 template <typename T1, typename T2, typename T3, typename... Ts>
-constexpr inline T3&& get_third(T1, T2, T3&& x, Ts...) noexcept
+CMT_INTRIN constexpr T3&& get_third(T1, T2, T3&& x, Ts...) noexcept
 {
     return std::forward<T3>(x);
 }
 template <typename T, typename... Ts>
-constexpr inline T returns(Ts...)
+CMT_INTRIN constexpr T returns(Ts...)
 {
     return T();
 }
@@ -1095,32 +1121,32 @@ CMT_FN(get_third)
 CMT_FN_TPL((typename T), (T), returns)
 
 template <typename T1, typename T2>
-inline bool is_equal(const T1& x, const T2& y)
+CMT_INTRIN bool is_equal(const T1& x, const T2& y)
 {
     return x == y;
 }
 template <typename T1, typename T2>
-inline bool is_notequal(const T1& x, const T2& y)
+CMT_INTRIN bool is_notequal(const T1& x, const T2& y)
 {
     return x != y;
 }
 template <typename T1, typename T2>
-inline bool is_less(const T1& x, const T2& y)
+CMT_INTRIN bool is_less(const T1& x, const T2& y)
 {
     return x < y;
 }
 template <typename T1, typename T2>
-inline bool is_greater(const T1& x, const T2& y)
+CMT_INTRIN bool is_greater(const T1& x, const T2& y)
 {
     return x > y;
 }
 template <typename T1, typename T2>
-inline bool is_lessorequal(const T1& x, const T2& y)
+CMT_INTRIN bool is_lessorequal(const T1& x, const T2& y)
 {
     return x <= y;
 }
 template <typename T1, typename T2>
-inline bool is_greaterorequal(const T1& x, const T2& y)
+CMT_INTRIN bool is_greaterorequal(const T1& x, const T2& y)
 {
     return x >= y;
 }
@@ -1187,32 +1213,14 @@ using has_data_size = details::has_data_size_impl<decay<T>>;
 template <typename T>
 using value_type_of = typename decay<T>::value_type;
 
-template <typename T, typename Fn>
-constexpr CMT_INTRIN void cforeach(cvals_t<T>, Fn&&)
+template <typename T, T... values, typename Fn>
+CMT_INTRIN void cforeach(cvals_t<T, values...>, Fn&& fn)
 {
-}
-
-template <typename T, T v0, T... values, typename Fn>
-constexpr CMT_INTRIN void cforeach(cvals_t<T, v0, values...>, Fn&& fn)
-{
-    fn(cval<T, v0>);
-    cforeach(cvals_t<T, values...>(), std::forward<Fn>(fn));
-}
-
-template <typename Fn>
-constexpr CMT_INTRIN void cforeach(ctypes_t<>, Fn&&)
-{
-}
-
-template <typename T0, typename... types, typename Fn>
-constexpr CMT_INTRIN void cforeach(ctypes_t<T0, types...>, Fn&& fn)
-{
-    fn(ctype<T0>);
-    cforeach(ctypes_t<types...>(), std::forward<Fn>(fn));
+    swallow{ (fn(cval<T, values>), void(), 0)... };
 }
 
 template <typename T, typename Fn, CMT_ENABLE_IF(has_begin_end<T>::value)>
-constexpr CMT_INTRIN void cforeach(T&& list, Fn&& fn)
+CMT_INTRIN void cforeach(T&& list, Fn&& fn)
 {
     for (const auto& v : list)
     {
@@ -1221,7 +1229,7 @@ constexpr CMT_INTRIN void cforeach(T&& list, Fn&& fn)
 }
 
 template <typename T, size_t N, typename Fn>
-constexpr CMT_INTRIN void cforeach(const T (&array)[N], Fn&& fn)
+CMT_INTRIN void cforeach(const T (&array)[N], Fn&& fn)
 {
     for (size_t i = 0; i < N; i++)
     {
@@ -1236,6 +1244,24 @@ CMT_INTRIN void cforeach_tuple_impl(const std::tuple<Ts...>& tuple, Fn&& fn, csi
 {
     swallow{ (fn(std::get<indices>(tuple)), void(), 0)... };
 }
+
+template <size_t index, typename... types>
+CMT_INTRIN auto get_type_arg(ctypes_t<types...> type_list)
+{
+    return ctype<type_of<details::get_nth_type<index, types...>>>;
+}
+
+template <typename T0, typename... types, typename Fn, size_t... indices>
+CMT_INTRIN void cforeach_types_impl(ctypes_t<T0, types...> type_list, Fn&& fn, csizes_t<indices...>)
+{
+    swallow{ (fn(get_type_arg<indices>(type_list)), void(), 0)... };
+}
+}
+
+template <typename... Ts, typename Fn>
+CMT_INTRIN void cforeach(ctypes_t<Ts...> types, Fn&& fn)
+{
+    details::cforeach_types_impl(types, std::forward<Fn>(fn), csizeseq<sizeof...(Ts)>);
 }
 
 template <typename... Ts, typename Fn>
@@ -1259,6 +1285,33 @@ CMT_INTRIN void cforeach(A0&& a0, A1&& a1, A2&& a2, Fn&& fn)
                  [&](auto v1) { cforeach(std::forward<A2>(a2), [&](auto v2) { fn(v0, v1, v2); }); });
     });
 }
+template <typename TrueFn, typename FalseFn = fn_noop>
+CMT_INTRIN decltype(auto) cif(cbool_t<true>, TrueFn&& truefn, FalseFn&& = FalseFn())
+{
+    return truefn(cbool<true>);
+}
+
+template <typename TrueFn, typename FalseFn = fn_noop>
+CMT_INTRIN decltype(auto) cif(cbool_t<false>, TrueFn&&, FalseFn&& falsefn = FalseFn())
+{
+    return falsefn(cbool<false>);
+}
+
+template <typename T, T start, T stop, typename BodyFn>
+CMT_INTRIN decltype(auto) cfor(cval_t<T, start>, cval_t<T, stop>, BodyFn&& bodyfn)
+{
+    return cforeach(cvalrange<T, start, stop>, std::forward<BodyFn>(bodyfn));
+}
+
+template <typename T, T... vs, typename U, typename Function, typename Fallback = fn_noop>
+void cswitch(cvals_t<T, vs...>, const U& value, Function&& function, Fallback&& fallback = Fallback())
+{
+    bool result = false;
+    swallow{ (result = result || ((vs == value) ? (function(cval<T, vs>), void(), true) : false), void(),
+              0)... };
+    if (!result)
+        fallback();
+}
 
 template <typename T, typename Fn, typename DefFn = fn_noop, typename CmpFn = fn_is_equal>
 CMT_INTRIN decltype(auto) cswitch(cvals_t<T>, identity<T>, Fn&&, DefFn&& deffn = DefFn(), CmpFn&& = CmpFn())
@@ -1279,24 +1332,6 @@ CMT_INTRIN decltype(auto) cswitch(cvals_t<T, v0, values...>, identity<T> value, 
         return cswitch(cvals_t<T, values...>(), value, std::forward<Fn>(fn), std::forward<DefFn>(deffn),
                        std::forward<CmpFn>(cmpfn));
     }
-}
-
-template <typename TrueFn, typename FalseFn = fn_noop>
-CMT_INTRIN decltype(auto) cif(cbool_t<true>, TrueFn&& truefn, FalseFn&& = FalseFn())
-{
-    return truefn(cbool<true>);
-}
-
-template <typename TrueFn, typename FalseFn = fn_noop>
-CMT_INTRIN decltype(auto) cif(cbool_t<false>, TrueFn&&, FalseFn&& falsefn = FalseFn())
-{
-    return falsefn(cbool<false>);
-}
-
-template <typename T, T start, T stop, typename BodyFn>
-CMT_INTRIN decltype(auto) cfor(cval_t<T, start>, cval_t<T, stop>, BodyFn&& bodyfn)
-{
-    return cforeach(cvalrange<T, start, stop>, std::forward<BodyFn>(bodyfn));
 }
 
 namespace details
@@ -1459,7 +1494,6 @@ struct function<Result(Args...)>
     CMT_INTRIN explicit operator bool() const noexcept { return !!fn; }
 
     CMT_INTRIN ~function() { delete fn; }
-
 private:
     details::virtual_function<Result, Args...>* fn;
 };
@@ -1629,9 +1663,9 @@ inline array_ref<T> make_array_ref(Container& cont)
 
 template <typename Container, CMT_ENABLE_IF(has_data_size<Container>::value),
           typename T = remove_pointer<decltype(std::declval<Container>().data())>>
-inline array_ref<T> make_array_ref(const Container& cont)
+inline array_ref<const T> make_array_ref(const Container& cont)
 {
-    return array_ref<T>(cont.data(), cont.size());
+    return array_ref<const T>(cont.data(), cont.size());
 }
 
 template <typename T>
@@ -1681,7 +1715,6 @@ struct result
     constexpr reference value() { return m_value; }
     constexpr ErrEnum error() const { return m_error; }
     constexpr bool ok() const { return m_error == OkValue; }
-
 private:
     Type m_value;
     ErrEnum m_error;
@@ -1731,15 +1764,23 @@ struct range
     using const_reference = const T&;
     using pointer         = T*;
     using const_pointer   = const T*;
+    using diff_type       = decltype(std::declval<T>() - std::declval<T>());
+
+    constexpr range(value_type begin, value_type end, diff_type step) noexcept : value_begin(begin),
+                                                                                 value_end(end),
+                                                                                 step(step)
+    {
+    }
 
     struct iterator
     {
-        T value;
+        value_type value;
+        diff_type step;
         const_reference operator*() const { return value; }
         const_pointer operator->() const { return &value; }
         iterator& operator++()
         {
-            ++value;
+            value += step;
             return *this;
         }
         iterator operator++(int)
@@ -1748,18 +1789,28 @@ struct range
             ++(*this);
             return copy;
         }
-        bool operator!=(const iterator& other) const { return value != other.value; }
+        bool operator!=(const iterator& other) const
+        {
+            return step > 0 ? value < other.value : value > other.value;
+        }
     };
-    T value_begin;
-    T value_end;
-    iterator begin() const { return iterator{ value_begin }; }
-    iterator end() const { return iterator{ value_end }; }
+    value_type value_begin;
+    value_type value_end;
+    diff_type step;
+    iterator begin() const { return iterator{ value_begin, step }; }
+    iterator end() const { return iterator{ value_end, step }; }
 };
 
-template <typename T1, typename T2>
-range<common_type<T1, T2>> make_range(T1 begin, T2 end)
+template <typename T>
+range<T> make_range(T begin, T end)
 {
-    return { begin, end };
+    return range<T>(begin, end, end > begin ? 1 : -1);
+}
+
+template <typename T, typename diff_type = decltype(std::declval<T>() - std::declval<T>())>
+range<T> make_range(T begin, T end, diff_type step)
+{
+    return range<T>(begin, end, step);
 }
 
 template <typename T>
@@ -1774,7 +1825,7 @@ struct named
     constexpr named(const char* name) noexcept : name(name) {}
 
     template <typename T>
-    constexpr named_arg<T> operator=(T&& value)
+    CMT_INTRIN constexpr named_arg<T> operator=(T&& value)
     {
         return named_arg<T>{ std::forward<T>(value), name };
     }
@@ -1818,6 +1869,7 @@ struct cstring
     {
         return true;
     }
+    constexpr char operator[](size_t index) const noexcept { return value[index]; }
 };
 
 namespace details
@@ -1844,8 +1896,9 @@ CMT_INLINE constexpr cstring<N1 - 1 + N2 - 1 + 1> concat_str_impl(const cstring<
     return concat_str_impl(str1, str2, csizeseq<N1 - 1 + N2 - 1>);
 }
 template <size_t N1, size_t Nfrom, size_t Nto, size_t... indices>
-cstring<N1 - Nfrom + Nto> str_replace_impl(size_t pos, const cstring<N1>& str, const cstring<Nfrom>&,
-                                           const cstring<Nto>& to, csizes_t<indices...>)
+CMT_INTRIN cstring<N1 - Nfrom + Nto> str_replace_impl(size_t pos, const cstring<N1>& str,
+                                                      const cstring<Nfrom>&, const cstring<Nto>& to,
+                                                      csizes_t<indices...>)
 {
     if (pos == size_t(-1))
         stop_constexpr();
@@ -1855,35 +1908,35 @@ cstring<N1 - Nfrom + Nto> str_replace_impl(size_t pos, const cstring<N1>& str, c
 }
 }
 
-CMT_INLINE constexpr cstring<1> concat_cstring() { return { { 0 } }; }
+CMT_INTRIN constexpr cstring<1> concat_cstring() { return { { 0 } }; }
 
 template <size_t N1>
-CMT_INLINE constexpr cstring<N1> concat_cstring(const cstring<N1>& str1)
+CMT_INTRIN constexpr cstring<N1> concat_cstring(const cstring<N1>& str1)
 {
     return str1;
 }
 
 template <size_t N1, size_t N2, typename... Args>
-CMT_INLINE constexpr auto concat_cstring(const cstring<N1>& str1, const cstring<N2>& str2,
+CMT_INTRIN constexpr auto concat_cstring(const cstring<N1>& str1, const cstring<N2>& str2,
                                          const Args&... args)
 {
     return details::concat_str_impl(str1, concat_cstring(str2, args...));
 }
 
 template <size_t N>
-CMT_INLINE constexpr cstring<N> make_cstring(const char (&str)[N])
+CMT_INTRIN constexpr cstring<N> make_cstring(const char (&str)[N])
 {
     return details::make_cstring_impl(str, csizeseq<N - 1>);
 }
 
 template <char... chars>
-CMT_INLINE constexpr cstring<sizeof...(chars) + 1> make_cstring(cchars_t<chars...>)
+CMT_INTRIN constexpr cstring<sizeof...(chars) + 1> make_cstring(cchars_t<chars...>)
 {
     return { { chars..., 0 } };
 }
 
 template <size_t N1, size_t Nneedle>
-size_t str_find(const cstring<N1>& str, const cstring<Nneedle>& needle)
+CMT_INTRIN size_t str_find(const cstring<N1>& str, const cstring<Nneedle>& needle)
 {
     size_t count = 0;
     for (size_t i = 0; i < N1; i++)
@@ -1899,8 +1952,8 @@ size_t str_find(const cstring<N1>& str, const cstring<Nneedle>& needle)
 }
 
 template <size_t N1, size_t Nfrom, size_t Nto>
-cstring<N1 - Nfrom + Nto> str_replace(const cstring<N1>& str, const cstring<Nfrom>& from,
-                                      const cstring<Nto>& to)
+CMT_INTRIN cstring<N1 - Nfrom + Nto> str_replace(const cstring<N1>& str, const cstring<Nfrom>& from,
+                                                 const cstring<Nto>& to)
 {
     return details::str_replace_impl(str_find(str, from), str, from, to, csizeseq<N1 - Nfrom + Nto - 1>);
 }
@@ -1920,13 +1973,6 @@ namespace details
 
 constexpr inline size_t strlen(const char* str) { return *str ? 1 + cometa::details::strlen(str + 1) : 0; }
 
-template <size_t... indices, size_t Nout = 1 + sizeof...(indices)>
-constexpr inline cstring<Nout> gettypename_impl(const char* str, csizes_t<indices...>)
-{
-    cstring<Nout> arr{ { str[indices]..., 0 } };
-    return arr;
-}
-
 template <typename T>
 constexpr inline type_id_t typeident_impl() noexcept
 {
@@ -1934,12 +1980,18 @@ constexpr inline type_id_t typeident_impl() noexcept
 }
 
 #ifdef CMT_COMPILER_CLANG
-constexpr size_t typename_prefix  = details::strlen("auto cometa::ctype_name() [T = ");
-constexpr size_t typename_postfix = details::strlen("]");
+constexpr size_t typename_prefix  = sizeof("auto cometa::ctype_name() [T = ") - 1;
+constexpr size_t typename_postfix = sizeof("]") - 1;
 #else
-constexpr size_t typename_prefix  = details::strlen("constexpr auto cometa::ctype_name() [with T = ");
-constexpr size_t typename_postfix = details::strlen("]");
+constexpr size_t typename_prefix  = sizeof("constexpr auto cometa::ctype_name() [with T = ") - 1;
+constexpr size_t typename_postfix = sizeof("]") - 1;
 #endif
+
+template <size_t... indices, size_t Nout = 1 + sizeof...(indices)>
+constexpr cstring<Nout> gettypename_impl(const char* str, csizes_t<indices...>) noexcept
+{
+    return cstring<Nout>{ (str[indices])..., 0 };
+}
 }
 
 template <typename T>
@@ -1960,7 +2012,7 @@ template <typename T>
 inline const char* type_name() noexcept
 {
     static const auto name = ctype_name<T>();
-    return &name[0];
+    return name.c_str();
 }
 
 /**
@@ -1999,4 +2051,4 @@ constexpr inline type_id_t ctypeid(T x)
 }
 }
 
-CMT_DIAGNOSTIC(pop)
+#pragma GCC diagnostic pop

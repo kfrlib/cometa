@@ -6,8 +6,14 @@
 
 #pragma once
 
+#ifdef LIBC_WORKAROUND_GETS
+extern char* gets(char* __s);
+#endif
+
 #if defined(_M_IX86) || defined(__i386__) || defined(_M_X64) || defined(__x86_64__)
 #define CMT_ARCH_X86 1
+#elif defined(__arm__) || defined(__arm64__) || defined(_M_ARM) || defined(__aarch64__)
+#define CMT_ARCH_ARM 1
 #endif
 
 #ifdef CMT_ARCH_X86
@@ -118,10 +124,41 @@
 #define CMT_ARCH_NAME sse2
 #elif defined CMT_ARCH_SSE
 #define CMT_ARCH_NAME sse
-#else
-#define CMT_ARCH_NAME legacy
 #endif
 
+#elif defined(CMT_ARCH_ARM)
+
+#if defined(__aarch64__)
+#define CMT_ARCH_X64 1
+#else
+#define CMT_ARCH_X32 1
+#endif
+
+#ifdef __ARM_NEON__
+
+#if __ARM_ARCH >= 8 && defined(__aarch64__)
+#define CMT_ARCH_NEON64 1
+#define CMT_ARCH_NEON 1
+#define CMT_ARCH_NAME neon64
+#else
+#define CMT_ARCH_NEON 1
+#define CMT_ARCH_NAME neon
+#define KFR_NO_NATIVE_F64 1
+#endif
+#endif
+
+#endif
+
+#ifndef CMT_ARCH_NAME
+#define CMT_ARCH_NAME common
+#endif
+
+#ifndef KFR_NO_NATIVE_F64
+#define KFR_NATIVE_F64 1
+#endif
+
+#ifndef KFR_NO_NATIVE_I64
+#define KFR_NATIVE_I64 1
 #endif
 
 #define CMT_STRINGIFY2(x) #x
@@ -142,6 +179,7 @@
 #define CMT_OS_MOBILE 1
 #elif TARGET_OS_MAC
 #define CMT_OS_MAC 1
+#define CMT_OS_MACOS 1
 #define CMT_OS_OSX 1
 #endif
 #define CMT_OS_POSIX 1
@@ -166,7 +204,7 @@
 #define CMT_MSC_VER 0
 #endif
 
-#if defined(__GNUC__) // GCC, Clang
+#if defined(__GNUC__) || defined(__clang__) // GCC, Clang
 #define CMT_COMPILER_GNU 1
 #define CMT_GNU_ATTRIBUTES 1
 #define CMT_GCC_VERSION (__GNUC__ * 100 + __GNUC_MINOR__)
@@ -198,9 +236,14 @@
 
 #define CMT_NODEBUG
 // __attribute__((__nodebug__))
-#define CMT_INLINE __inline__ __attribute__((__always_inline__))
+#ifdef NDEBUG
+#define CMT_ALWAYS_INLINE __attribute__((__always_inline__))
+#else
+#define CMT_ALWAYS_INLINE
+#endif
+#define CMT_INLINE __inline__ CMT_ALWAYS_INLINE
 #define CMT_INTRIN CMT_INLINE CMT_NODEBUG
-#define CMT_INLINE_MEMBER __attribute__((__always_inline__))
+#define CMT_INLINE_MEMBER CMT_ALWAYS_INLINE
 #define CMT_INLINE_LAMBDA CMT_INLINE_MEMBER
 #define CMT_NOINLINE __attribute__((__noinline__))
 #define CMT_FLATTEN __attribute__((__flatten__))
@@ -227,10 +270,14 @@
 
 #define CMT_ALWAYS_INLINE_STATIC CMT_ALWAYS_INLINE static
 
+#ifdef CMT_ARCH_x86
 #ifdef CMT_OS_WIN
 #define CMT_CDECL __cdecl
 #else
 #define CMT_CDECL __attribute__((cdecl))
+#endif
+#else
+#define CMT_CDECL
 #endif
 
 #ifdef CMT_OS_WIN
@@ -250,6 +297,21 @@
 #define CMT_HAS_BUILTIN(builtin) __has_builtin(builtin)
 #else
 #define CMT_HAS_BUILTIN(builtin) 0
+#endif
+
+#if CMT_HAS_BUILTIN(CMT_ASSUME)
+#define CMT_ASSUME(x) __builtin_assume(x)
+#else
+#define CMT_ASSUME(x)                                                                                        \
+    do                                                                                                       \
+    {                                                                                                        \
+    } while (0)
+#endif
+
+#if CMT_HAS_BUILTIN(CMT_ASSUME)
+#define CMT_ASSUME_ALIGNED(x, a) __builtin_assume_aligned(x, a)
+#else
+#define CMT_ASSUME_ALIGNED(x, a) x
 #endif
 
 #ifdef __has_feature
@@ -294,7 +356,7 @@
 #define CMT_HAS_FULL_CONSTEXPR 1
 #endif
 
-#ifdef CMT_HAS_CONSTEXPR
+#if CMT_HAS_CONSTEXPR
 #define CMT_CONSTEXPR constexpr
 #else
 #define CMT_CONSTEXPR
@@ -313,7 +375,7 @@
 #if CMT_COMPILER_GNU && !defined(__EXCEPTIONS)
 #define CMT_HAS_EXCEPTIONS 0
 #endif
-#if CMT_MSC_VER && !_HAS_EXCEPTIONS
+#if CMT_COMPILER_MSVC && !_HAS_EXCEPTIONS
 #define CMT_HAS_EXCEPTIONS 0
 #endif
 
@@ -321,12 +383,20 @@
 #define CMT_HAS_EXCEPTIONS 1
 #endif
 
+#if __has_include(<assert.h>)
+#include <assert.h>
+#define CMT_HAS_ASSERT_H 1
+#endif
+
 #ifndef CMT_THROW
 #if CMT_HAS_EXCEPTIONS
 #define CMT_THROW(x) throw x
 #else
-#include <assert.h>
+#ifdef CMT_HAS_ASSERT_H
 #define CMT_THROW(x) assert(false)
+#else
+#define CMT_THROW(x) abort()
+#endif
 #endif
 #endif
 
@@ -336,17 +406,23 @@
 #define CMT_FUNC_SIGNATURE __PRETTY_FUNCTION__
 #endif
 
-#define CMT_STR(str) #str
-#if defined CMT_COMPILER_CLANG
-#define CMT_DIAGNOSTIC(pragma) _Pragma(CMT_STR(clang diagnostic pragma))
-#define CMT_CLANG_DIAGNOSTIC(pragma) _Pragma(CMT_STR(clang diagnostic pragma))
-#define CMT_GCC_DIAGNOSTIC(pragma)
-#elif defined CMT_COMPILER_GNU
-#define CMT_DIAGNOSTIC(pragma) _Pragma(CMT_STR(GCC diagnostic pragma))
-#define CMT_CLANG_DIAGNOSTIC(pragma)
-#define CMT_GCC_DIAGNOSTIC(pragma) _Pragma(CMT_STR(GCC diagnostic pragma))
+#if CMT_COMPILER_CLANG
+#define CMT_LOOP_NOUNROLL                                                                                    \
+    _Pragma("clang loop vectorize( disable )") _Pragma("clang loop interleave( disable )")                   \
+        _Pragma("clang loop unroll( disable )")
+
+#define CMT_LOOP_UNROLL _Pragma("clang loop unroll( full )")
+#define CMT_VEC_CC __attribute__((vectorcall))
 #else
-#define CMT_DIAGNOSTIC(pragma)
-#define CMT_CLANG_DIAGNOSTIC(pragma)
-#define CMT_GCC_DIAGNOSTIC(pragma)
+#define CMT_LOOP_NOUNROLL
+#define CMT_LOOP_UNROLL
+#ifdef CMT_COMPILER_MSVC
+#define CMT_VEC_CC __vectorcall
+#endif
+#endif
+
+#if defined(CMT_GNU_ATTRIBUTES)
+#define CMT_FAST_CC __attribute__((fastcall))
+#else
+#define CMT_FAST_CC __fastcall
 #endif
