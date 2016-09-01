@@ -35,6 +35,8 @@ void func(const struct3& s3)
     static_assert(size == 4, "");
 }
 
+int& ref_fn(int& x) { return x; }
+
 int main(int, char**)
 {
     static_assert(is_poweroftwo(1), "");
@@ -88,6 +90,16 @@ int main(int, char**)
     static_assert(make_cstring("abc") == make_cstring("abc"), "");
     static_assert(ctype_name<float>() == ctype_name<float>(), "");
     static_assert(ctype_name<float>() != ctype_name<double>(), "");
+
+    {
+        function<int&(int&)> fn = ref_fn;
+
+        int x;
+        int& y = ref_fn(x);
+        int& z = fn(x);
+        (void)y;
+        (void)z;
+    }
 
     return 0;
 }

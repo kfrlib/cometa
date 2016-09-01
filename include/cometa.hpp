@@ -1486,10 +1486,7 @@ struct function<Result(Args...)>
     }
     CMT_INTRIN Result operator()(Args... args) const
     {
-        if (fn)
-            return (*fn)(args...);
-        else
-            return details::return_val<Result>();
+        return (*fn)(std::forward<Args>(args)...);
     }
     CMT_INTRIN explicit operator bool() const noexcept { return !!fn; }
 
@@ -1990,7 +1987,7 @@ constexpr size_t typename_postfix = sizeof("]") - 1;
 template <size_t... indices, size_t Nout = 1 + sizeof...(indices)>
 constexpr cstring<Nout> gettypename_impl(const char* str, csizes_t<indices...>) noexcept
 {
-    return cstring<Nout>{ (str[indices])..., 0 };
+    return cstring<Nout>{{ (str[indices])..., 0 }};
 }
 }
 
