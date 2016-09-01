@@ -99,6 +99,10 @@ int main(int, char**)
         int& z = fn(x);
         (void)y;
         (void)z;
+        function<int&(int&)> empty_fn;
+        int d;
+        int& a = fn.call(d, x);
+        (void)a;
     }
 
     return 0;
