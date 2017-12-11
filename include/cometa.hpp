@@ -1996,9 +1996,11 @@ constexpr cstring<Nout> gettypename_impl(const char* str, csizes_t<indices...>) 
 template <typename T>
 constexpr auto ctype_name() noexcept
 {
-    constexpr size_t length =
-        sizeof(CMT_FUNC_SIGNATURE) - 1 - details::typename_prefix - details::typename_postfix;
-    return details::gettypename_impl(CMT_FUNC_SIGNATURE + details::typename_prefix, csizeseq<length>);
+    constexpr size_t length = 
+        sizeof(CMT_FUNC_SIGNATURE) - 1 > details::typename_prefix + details::typename_postfix ?
+        sizeof(CMT_FUNC_SIGNATURE) - 1 - details::typename_prefix - details::typename_postfix :
+        0;
+    return length == 0 ? cstring<1>{ { 0 } } : details::gettypename_impl(CMT_FUNC_SIGNATURE + details::typename_prefix, csizeseq<length>);
 }
 
 /**
