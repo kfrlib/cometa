@@ -1978,21 +1978,23 @@ constexpr inline type_id_t typeident_impl() noexcept
     return type_id_t(pconstvoid(&typeident_impl<T>));
 }
 
-#ifdef CMT_COMPILER_CLANG
-constexpr size_t typename_prefix  = sizeof("auto cometa::ctype_name() [T = ") - 1;
-constexpr size_t typename_postfix = sizeof("]") - 1;
-#else
-constexpr size_t typename_prefix  = sizeof("constexpr auto cometa::ctype_name() [with T = ") - 1;
-constexpr size_t typename_postfix = sizeof("]") - 1;
-#endif
-
 template <size_t... indices, size_t Nout = 1 + sizeof...(indices)>
 constexpr cstring<Nout> gettypename_impl(const char* str, csizes_t<indices...>) noexcept
 {
     return cstring<Nout>{ { (str[indices])..., 0 } };
 }
 }
-
+template <typename T>
+constexpr auto cfunc_sign() noexcept
+{
+    constexpr size_t length = sizeof(CMT_FUNC_SIGNATURE) - 1;
+    return details::gettypename_impl(CMT_FUNC_SIGNATURE, csizeseq<length>);
+}
+namespace details
+{
+constexpr size_t typename_prefix  = sizeof(decltype(cfunc_sign<float>())) - 1 - 5 - 1;
+constexpr size_t typename_postfix = sizeof("]") - 1;
+}
 template <typename T>
 constexpr auto ctype_name() noexcept
 {
@@ -2000,7 +2002,7 @@ constexpr auto ctype_name() noexcept
         sizeof(CMT_FUNC_SIGNATURE) - 1 > details::typename_prefix + details::typename_postfix ?
         sizeof(CMT_FUNC_SIGNATURE) - 1 - details::typename_prefix - details::typename_postfix :
         0;
-    return length == 0 ? cstring<1>{ { 0 } } : details::gettypename_impl(CMT_FUNC_SIGNATURE + details::typename_prefix, csizeseq<length>);
+    return length == 0 ? cstring<length + 1>{ { 0 } } : details::gettypename_impl(CMT_FUNC_SIGNATURE + details::typename_prefix, csizeseq<length>);
 }
 
 /**
